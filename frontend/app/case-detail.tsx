@@ -16,8 +16,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import AnalysisRenderer from "@/components/AnalysisRenderer";
 import { showAlert } from "@/utils/alert";
-
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+import api from '../src/services/api';
 
 interface Message {
   id: string;
@@ -47,12 +46,9 @@ export default function CaseDetailScreen() {
   const loadCaseDetail = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/api/case/detail/${caseId}`);
-      const data = await response.json();
-      if (response.ok) {
-        setCaseData(data.case);
-        setMessages(data.messages || []);
-      }
+      const response = await api.get(`/case/detail/${caseId}`);
+      setCaseData(response.data.case);
+      setMessages(response.data.messages || []);
     } catch (error) {
       console.error("Error loading case detail:", error);
     } finally {
@@ -84,30 +80,23 @@ export default function CaseDetailScreen() {
       formData.append("case_id", caseId || "");
       formData.append("question", question);
 
-      const response = await fetch(`${API_URL}/api/case/followup`, {
-        method: "POST",
-        body: formData,
+      const response = await api.post('/case/followup', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
         signal: controller.signal,
       });
 
       clearTimeout(timeoutId);
-      const data = await response.json();
 
-      if (response.ok) {
-        // Replace temp msg with real ones
-        setMessages((prev) => {
-          const filtered = prev.filter((m) => m.id !== tempUserMsg.id);
-          return [...filtered, data.user_message, data.ai_message];
-        });
-      } else {
-        showAlert("Error", data.detail || "Failed to get response");
-        setMessages((prev) => prev.filter((m) => m.id !== tempUserMsg.id));
-      }
+      // Replace temp msg with real ones
+      setMessages((prev) => {
+        const filtered = prev.filter((m) => m.id !== tempUserMsg.id);
+        return [...filtered, response.data.user_message, response.data.ai_message];
+      });
     } catch (error: any) {
-      if (error.name === "AbortError") {
+      if (error.name === "AbortError" || error.code === "ERR_CANCELED") {
         showAlert("Timeout", "Response took too long. Please try again.");
       } else {
-        showAlert("Error", "Network error. Please try again.");
+        showAlert("Error", error.response?.data?.detail || "Network error. Please try again.");
       }
       setMessages((prev) => prev.filter((m) => m.id !== tempUserMsg.id));
     } finally {

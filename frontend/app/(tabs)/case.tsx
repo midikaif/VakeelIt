@@ -17,8 +17,7 @@ import * as ImagePicker from "expo-image-picker";
 import AnalysisLoader from "@/components/AnalysisLoader";
 import AnalysisRenderer from "@/components/AnalysisRenderer";
 import { showAlert } from "@/utils/alert";
-
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+import api from '../../src/services/api';
 
 const CASE_TYPES = [
   "Civil",
@@ -70,35 +69,26 @@ export default function CaseScreen() {
       formData.append("case_description", caseDescription);
       formData.append("language", language);
 
-      const response = await fetch(`${API_URL}/api/case/analyze`, {
-        method: "POST",
-        body: formData,
+      const response = await api.post('/case/analyze', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
         signal: controller.signal,
       });
 
       clearTimeout(timeoutId);
-      const data = await response.json();
 
-      if (response.ok) {
-        setAnalysis(data);
-        setCaseTitle("");
-        setCaseDescription("");
-      } else {
-        showAlert(
-          "Analysis Failed",
-          data.detail || "Could not analyze the case. Please try again.",
-        );
-      }
+      setAnalysis(response.data);
+      setCaseTitle("");
+      setCaseDescription("");
     } catch (error: any) {
-      if (error.name === "AbortError") {
+      if (error.name === "AbortError" || error.code === "ERR_CANCELED") {
         showAlert(
           "Taking Too Long",
           "The analysis is taking longer than expected. Please try again with a shorter description.",
         );
       } else {
         showAlert(
-          "Connection Error",
-          "Could not connect to the server. Please check your internet connection.",
+          "Analysis Failed",
+          error.response?.data?.detail || "Could not connect to the server. Please check your internet connection.",
         );
       }
     } finally {
@@ -174,32 +164,23 @@ export default function CaseScreen() {
         );
       }
 
-      const response = await fetch(`${API_URL}/api/case/analyze-document`, {
-        method: "POST",
-        body: formData,
+      const response = await api.post('/case/analyze-document', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
         signal: controller.signal,
       });
 
       clearTimeout(timeoutId);
-      const data = await response.json();
 
-      if (response.ok) {
-        setAnalysis(data);
-        setSelectedFile(null);
-      } else {
-        showAlert(
-          "Analysis Failed",
-          data.detail || "Could not analyze the document.",
-        );
-      }
+      setAnalysis(response.data);
+      setSelectedFile(null);
     } catch (error: any) {
-      if (error.name === "AbortError") {
+      if (error.name === "AbortError" || error.code === "ERR_CANCELED") {
         showAlert(
           "Taking Too Long",
           "Document analysis timed out. Please try again.",
         );
       } else {
-        showAlert("Connection Error", "Could not connect to the server.");
+        showAlert("Analysis Failed", error.response?.data?.detail || "Could not connect to the server.");
       }
     } finally {
       setLoading(false);
@@ -209,11 +190,8 @@ export default function CaseScreen() {
   const loadHistory = async () => {
     if (!user?.id) return;
     try {
-      const response = await fetch(`${API_URL}/api/case/history/${user.id}`);
-      const data = await response.json();
-      if (response.ok) {
-        setHistory(data);
-      }
+      const response = await api.get(`/case/history/${user.id}`);
+      setHistory(response.data);
     } catch (error) {
       console.error("Error loading history:", error);
     }
@@ -226,23 +204,18 @@ export default function CaseScreen() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 60000);
 
-      const response = await fetch(`${API_URL}/api/procedure/${caseType}`, {
+      const response = await api.get(`/procedure/${caseType}`, {
         signal: controller.signal,
       });
 
       clearTimeout(timeoutId);
-      const data = await response.json();
 
-      if (response.ok) {
-        setProcedure(data);
-      } else {
-        showAlert("Error", data.detail || "Could not load procedure.");
-      }
+      setProcedure(response.data);
     } catch (error: any) {
-      if (error.name === "AbortError") {
+      if (error.name === "AbortError" || error.code === "ERR_CANCELED") {
         showAlert("Timeout", "Loading procedure took too long.");
       } else {
-        showAlert("Error", "Could not connect to the server.");
+        showAlert("Error", error.response?.data?.detail || "Could not connect to the server.");
       }
     } finally {
       setLoading(false);

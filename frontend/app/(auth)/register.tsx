@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
@@ -15,9 +14,8 @@ import { useRouter } from 'expo-router';
 import { useAuth } from "@/contexts/AuthContext";
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
-import {showAlert} from '@/utils/alert';
-
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+import { showAlert } from '@/utils/alert';
+import api from '../../src/services/api';
 
 export default function RegisterScreen() {
   const [email, setEmail] = useState('');
@@ -58,23 +56,15 @@ export default function RegisterScreen() {
         userData.bio = bio;
       }
 
-      const response = await fetch(`${API_URL}/api/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(userData),
-      });
+      const response = await api.post('/auth/register', userData);
 
-      const data = await response.json();
-
-      if (response.ok) {
-        await login(data.access_token, data.user);
-        router.replace('/(tabs)/home');
-      } else {
-        showAlert('Registration Failed', data.detail || 'Please try again');
-      }
-    } catch (error) {
-      showAlert('Error', 'Network error. Please try again.');
+      // Axios automatically throws for non-200 responses
+      await login(response.data.access_token, response.data.user);
+      router.replace('/(tabs)/home');
+    } catch (error: any) {
       console.error(error);
+      const detail = error.response?.data?.detail || 'Network error or Registration failed';
+      showAlert('Registration Failed', detail);
     } finally {
       setLoading(false);
     }

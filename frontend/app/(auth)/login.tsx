@@ -15,8 +15,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from "@/contexts/AuthContext";
 import { Ionicons } from '@expo/vector-icons';
 import { showAlert } from '@/utils/alert';
-
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+import api from '../../src/services/api';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -33,23 +32,16 @@ export default function LoginScreen() {
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        await login(data.access_token, data.user);
-        router.replace('/(tabs)/home');
-      } else {
-        showAlert('Login Failed', data.detail || 'Invalid credentials');
-      }
-    } catch (error) {
-      showAlert('Error', 'Network error. Please try again.');
+      const response = await api.post('/auth/login', { email, password });
+      
+      // Axios automatically throws an error for 4xx/5xx status codes,
+      // so if we reach here, it was successful.
+      await login(response.data.access_token, response.data.user);
+      router.replace('/(tabs)/home');
+    } catch (error: any) {
       console.error(error);
+      const detail = error.response?.data?.detail || 'Invalid credentials or Network Error';
+      showAlert('Login Failed', detail);
     } finally {
       setLoading(false);
     }

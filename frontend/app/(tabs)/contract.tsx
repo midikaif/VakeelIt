@@ -15,8 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { showAlert } from "@/utils/alert";
-
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+import api from '../../src/services/api';
 
 export default function ContractScreen() {
   const { user } = useAuth();
@@ -118,30 +117,24 @@ export default function ContractScreen() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 90000);
 
-      const response = await fetch(`${API_URL}/api/contract/analyze`, {
-        method: "POST",
-        body: formData,
+      const response = await api.post('/contract/analyze', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
         signal: controller.signal,
       });
 
       clearTimeout(timeoutId);
-      const data = await response.json();
 
-      if (response.ok) {
-        setAnalysis(data);
-        showAlert("Success", "Contract analyzed successfully");
-        setTextInput("");
-        setSelectedFile(null);
-        setDocumentName("");
-      } else {
-        showAlert("Error", data.detail || "Analysis failed. Please try again.");
-      }
+      setAnalysis(response.data);
+      showAlert("Success", "Contract analyzed successfully");
+      setTextInput("");
+      setSelectedFile(null);
+      setDocumentName("");
     } catch (error: any) {
       console.error("Error analyzing contract:", error);
-      if (error.name === "AbortError") {
+      if (error.name === "AbortError" || error.code === "ERR_CANCELED") {
         showAlert("Timeout", "Analysis is taking too long. Please try again.");
       } else {
-        showAlert("Error", "Network error. Please try again.");
+        showAlert("Error", error.response?.data?.detail || "Network error. Please try again.");
       }
     } finally {
       setLoading(false);
@@ -153,14 +146,8 @@ export default function ContractScreen() {
 
     setLoading(true);
     try {
-      const response = await fetch(
-        `${API_URL}/api/contract/history/${user.id}`,
-      );
-      const data = await response.json();
-
-      if (response.ok) {
-        setHistory(data);
-      }
+      const response = await api.get(`/contract/history/${user.id}`);
+      setHistory(response.data);
     } catch (error) {
       console.error("Error loading history:", error);
     } finally {
