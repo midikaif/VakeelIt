@@ -7,19 +7,16 @@ from contextlib import asynccontextmanager
 from app.core.database import client
 from app.routers import auth, contract, case, procedure, lawyer, draft
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    yield
-    client.close()
-
-app = FastAPI(lifespan=lifespan)
+app = FastAPI()
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=["*"],
+    allow_origins=[ "https://legal-sahayak-r3l77iuvn-midikaifs-projects.vercel.app", 
+        "http://localhost:8081",
+        "http://127.0.0.1:8081"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
