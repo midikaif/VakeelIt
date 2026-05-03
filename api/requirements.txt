@@ -72,7 +72,7 @@ python-jose==3.5.0
 python-multipart==0.0.24
 pytokens==0.4.1
 PyYAML==6.0.3
-reportlab==4.5.0
+reportlab==4.0.8
 requests==2.33.1
 rlPyCairo==0.4.0
 rsa==4.9.1
@@ -94,4 +94,3 @@ webencodings==0.5.1
 websockets==16.0
 xhtml2pdf==0.2.17
 yarl==1.23.0
-reportlab
