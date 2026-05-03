@@ -50,7 +50,6 @@ pluggy==1.6.0
 propcache==0.4.1
 pyasn1==0.6.3
 pyasn1_modules==0.4.2
-pycairo==1.29.0
 pycodestyle==2.14.0
 pycparser==3.0
 pydantic==2.12.5
@@ -74,7 +73,6 @@ pytokens==0.4.1
 PyYAML==6.0.3
 reportlab==4.5.0
 requests==2.33.1
-rlPyCairo==0.4.0
 rsa==4.9.1
 s3transfer==0.16.1
 six==1.17.0
