@@ -72,7 +72,7 @@ python-jose==3.5.0
 python-multipart==0.0.24
 pytokens==0.4.1
 PyYAML==6.0.3
-reportlab==4.0.8
+reportlab==4.5.0
 requests==2.33.1
 rlPyCairo==0.4.0
 rsa==4.9.1
