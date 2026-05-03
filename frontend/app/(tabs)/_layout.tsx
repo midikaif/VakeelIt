@@ -52,11 +52,31 @@ export default function TabLayout() {
           href: isLawyer ? null : '/(tabs)/lawyers',
         }}
       />
+
+      <Tabs.Screen
+        name="draft"
+        options={{
+          title: 'Draft',
+          // href: '/(tabs)/draft',
+          tabBarIcon: ({ color, size }) => <Ionicons name="create" size={size} color={color} />,
+          href: isLawyer ? '/(tabs)/draft' : null,
+          tabBarItemStyle: isLawyer ? {} : { display: 'none' },
+        }}
+      />
+
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
           tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
+        }}
+      />
+
+      {/* ------- */}
+      <Tabs.Screen
+        name="research"
+        options={{
+          href: null, // This hides the tab button
         }}
       />
     </Tabs>
