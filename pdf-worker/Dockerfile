@@ -1,12 +1,14 @@
 FROM python:3.11-slim
 
 # Install system dependencies for WeasyPrint and Tesseract OCR
-RUN apt-get update && apt-get install -y \
-    libcairo2 \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libpango-1.0-0 \
-    libpangocairo-1.0-0 \
-    libgdk-pixbuf2.0-0 \
+    libharfbuzz0b \
+    libpangoft2-1.0-0 \
+    libharfbuzz-subset0 \
     libffi-dev \
+    libjpeg-dev \
+    libopenjp2-7-dev \
     shared-mime-info \
     tesseract-ocr \
     tesseract-ocr-eng \

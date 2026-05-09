@@ -11,9 +11,13 @@ services:
     envVars:
       - key: PORT
         value: 8000
-      - key: MONGO_URI
+      - key: MONGO_URL
         sync: false
-      - key: GEMINI_API_KEY
+      - key: DB_NAME
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: GOOGLE_API_KEY
         sync: false
       - key: PDF_WORKER_URL
         fromService:
