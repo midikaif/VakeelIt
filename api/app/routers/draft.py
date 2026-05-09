@@ -149,6 +149,16 @@ async def generate_draft(request: DraftRequest):
     <head>
         <meta charset="utf-8">
         <style>
+            @font-face {{
+                font-family: 'Mukta';
+                src: url('assets/fonts/Mukta-Regular.ttf');
+                font-weight: normal;
+            }}
+            @font-face {{
+                font-family: 'Mukta';
+                src: url('assets/fonts/Mukta-Bold.ttf');
+                font-weight: bold;
+            }}
             body {{
                 font-family: 'Mukta', Helvetica, Arial, sans-serif;
                 font-size: 14px;

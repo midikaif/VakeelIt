@@ -5,10 +5,15 @@ import io
 import base64
 import logging
 try:
-    from xhtml2pdf import pisa
+    from weasyprint import HTML
+    from weasyprint.text.fonts import FontConfiguration
+    font_config = FontConfiguration()
+    weasyprint_available = True
 except ImportError:
-    pisa = None
-    logging.warning("xhtml2pdf not installed. PDF generation will be unavailable.")
+    HTML = None
+    font_config = None
+    weasyprint_available = False
+    logging.warning("weasyprint not installed. PDF generation will be unavailable.")
 from services.document_service import extract_text_from_pdf, extract_text_from_image
 from services.draft_service import generate_formatted_draft_pdf
 import os
@@ -53,40 +58,28 @@ class OCRRequest(BaseModel):
 class ExtractTextRequest(BaseModel):
     pdf_base64: str
 
-import os
-
-def link_callback(uri, rel):
-    """Resolve local paths for xhtml2pdf"""
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    if uri.startswith('/assets/') or uri.startswith('assets/'):
-        path = os.path.join(base_dir, uri.lstrip('/'))
-        path = os.path.normpath(path)
-        if os.path.exists(path):
-            return path
-    return uri
-
 @app.post("/generate-pdf")
 async def generate_pdf(request: PDFRequest):
-    if not pisa:
-        raise HTTPException(status_code=501, detail="PDF generation with xhtml2pdf is not available on this server.")
-    pdf_buffer = BytesIO()
-    pisa_status = pisa.CreatePDF(request.html_content, dest=pdf_buffer)
-
-    logger.info(f"request.html_content: {request.html_content}")
-    logger.info(f"xhtml2pdf status: {pisa_status}")
-    logger.info(f"pisa_status.err: {pisa_status.err}")
-
-
-    if pisa_status.err:
-        logger.error(f"xhtml2pdf error: {pisa_status.err}")
-        if hasattr(pisa_status, 'log'):
-            for log_entry in pisa_status.log:
-                logger.error(f"pisa log: {log_entry}")
-        raise HTTPException(status_code=500, detail=f"PDF Generation Failed: {pisa_status.err}")
-    logger.info(f"PDF generated successfully {pdf_buffer.getvalue()}")
-    pdf_base64 = base64.b64encode(pdf_buffer.getvalue()).decode('utf-8')
-    logger.info(f"PDF base64 encoded successfully {pdf_base64}")
-    return {"pdf_base64": pdf_base64}
+    if not weasyprint_available:
+        raise HTTPException(status_code=501, detail="PDF generation with weasyprint is not available on this server.")
+    
+    try:
+        logger.info("Generating PDF with WeasyPrint...")
+        # Resolve base URL so relative assets (like fonts) work perfectly
+        base_url = os.path.dirname(os.path.abspath(__file__))
+        
+        pdf_bytes = HTML(string=request.html_content, base_url=base_url).write_pdf(font_config=font_config)
+        logger.info("PDF generated successfully")
+        
+        pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
+        logger.info("PDF base64 encoded successfully")
+        return {"pdf_base64": pdf_base64}
+        
+    except Exception as e:
+        logger.error(f"weasyprint error: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"PDF Generation Failed: {str(e)}")
 
 @app.post("/generate-draft-pdf")
 async def generate_draft_pdf(request: DraftPDFRequest):
