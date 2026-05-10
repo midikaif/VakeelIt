@@ -3,7 +3,7 @@ services:
   - type: web
     name: legalsahayak-api
     env: python
-    region: singapore # Change as needed
+    region: oregon # Change as needed
     plan: free
     rootDir: api
     buildCommand: pip install -r requirements.txt
