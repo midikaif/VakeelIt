@@ -237,7 +237,9 @@ export default function DraftScreen() {
       const link = document.createElement('a');
       link.href = url;
       link.download = `${selectedDraft?.key}_${Date.now()}.pdf`;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } else {
       // Native — use expo-file-system + expo-sharing
@@ -263,7 +265,9 @@ export default function DraftScreen() {
       const link = document.createElement('a');
       link.href = url;
       link.download = `${selectedDraft?.key}_${Date.now()}.txt`;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
       URL.revokeObjectURL(url);
     }
   };
