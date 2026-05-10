@@ -58,6 +58,10 @@ class OCRRequest(BaseModel):
 class ExtractTextRequest(BaseModel):
     pdf_base64: str
 
+@app.get("/health")
+async def health_check():
+    return {"status": "pdf-worker healthy"}
+
 @app.post("/generate-pdf")
 async def generate_pdf(request: PDFRequest):
     if not weasyprint_available:

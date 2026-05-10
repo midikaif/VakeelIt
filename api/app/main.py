@@ -5,6 +5,9 @@ import logging
 from datetime import datetime
 from contextlib import asynccontextmanager
 import traceback
+import httpx
+import asyncio
+import os
 
 from app.core.database import client
 from app.routers import auth, contract, case, procedure, lawyer, draft
@@ -60,6 +63,17 @@ app.include_router(draft.router, prefix="/api")
 async def root():
     return {"message": "VakeelIt API - Your Legal Assistant"}
 
+async def ping_pdf_worker():
+    pdf_worker_url = os.getenv("PDF_WORKER_URL", "http://localhost:8001")
+    try:
+        async with httpx.AsyncClient() as client:
+            await client.get(f"{pdf_worker_url}/health", timeout=3.0)
+            logger.info("Successfully pinged PDF worker to wake it up.")
+    except Exception as e:
+        logger.error(f"PDF worker wake-up ping failed (it might still be waking up): {e}")
+
 @app.get("/api/health")
 async def health_check():
+    # Fire and forget: send a wake-up ping to the PDF worker in the background
+    asyncio.create_task(ping_pdf_worker())
     return {"status": "healthy", "timestamp": datetime.utcnow()}
