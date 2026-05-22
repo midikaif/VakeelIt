@@ -15,6 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { showAlert } from '@/utils/alert';
+import { checkPdfWorkerHealth, waitForPdfWorker, getPdfWorkerUrl } from '../../src/services/pdfWorkerHealthCheck';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -36,7 +37,7 @@ const DRAFT_TYPES = [
       { key: 'lawyer_address', label: 'Advocate Chamber/Address', placeholder: 'e.g. Chamber 104, District Court' },
       { key: 'bar_council_number', label: 'Bar Council Enrollment No.', placeholder: 'e.g. U.P./123/2015' },
       { key: 'court_name', label: 'Court Name', placeholder: 'e.g. District Court, Lucknow' },
-      { key: 'case_number', label: 'Case Number (if known)', placeholder: 'e.g. Civil Suit No. 45/2024' },
+      { key: 'case_number', label: 'Case Number', placeholder: 'e.g. Civil Suit No. 45/2024' },
       { key: 'case_type', label: 'Type of Case', placeholder: 'e.g. Civil / Criminal / Family' },
     ],
   },
@@ -155,6 +156,42 @@ const DRAFT_TYPES = [
   },
 ];
 
+// ─── PDF Worker Status Indicator ──────────────────────────────────
+const PdfWorkerStatusBanner = ({ status }: { status: 'unknown' | 'online' | 'warming' | 'offline' }) => {
+  if (status === 'online' || status === 'unknown') return null;
+
+  const config = {
+    warming: {
+      backgroundColor: '#FEF3C7',
+      borderColor: '#F59E0B',
+      icon: 'hourglass' as any,
+      iconColor: '#F59E0B',
+      text: 'PDF Service Warming Up',
+      subtext: 'The PDF download feature is initializing (may take 10-30 seconds on first request)',
+    },
+    offline: {
+      backgroundColor: '#FEE2E2',
+      borderColor: '#EF4444',
+      icon: 'alert-circle' as any,
+      iconColor: '#EF4444',
+      text: 'PDF Service Unavailable',
+      subtext: 'Document preview available, but PDF downloads may not work',
+    },
+  };
+
+  const current = config[status];
+
+  return (
+    <View style={[styles.statusBanner, { backgroundColor: current.backgroundColor, borderColor: current.borderColor }]}>
+      <Ionicons name={current.icon} size={16} color={current.iconColor} />
+      <View style={styles.statusBannerText}>
+        <Text style={[styles.statusBannerTitle, { color: current.iconColor }]}>{current.text}</Text>
+        <Text style={[styles.statusBannerSubtext, { color: current.iconColor }]}>{current.subtext}</Text>
+      </View>
+    </View>
+  );
+};
+
 // ─── Disclaimer component ──────────────────────────────────────────
 const Disclaimer = () => (
   <View style={styles.disclaimer}>
@@ -175,8 +212,26 @@ export default function DraftScreen() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ content: string; pdf_base64: string } | null>(null);
   const [previewVisible, setPreviewVisible] = useState(false);
+  const [pdfWorkerStatus, setPdfWorkerStatus] = useState<'unknown' | 'online' | 'warming' | 'offline'>('unknown');
+  const [showWorkerWarning, setShowWorkerWarning] = useState(false);
 
-  const handleSelectDraft = (draft: typeof DRAFT_TYPES[0]) => {
+  // Check PDF Worker health on component mount
+  useEffect(() => {
+    const checkWorkerStatus = async () => {
+      const health = await checkPdfWorkerHealth();
+      if (health.isOnline) {
+        setPdfWorkerStatus('online');
+      } else if (health.isWarmingUp) {
+        setPdfWorkerStatus('warming');
+        setShowWorkerWarning(true);
+      } else {
+        setPdfWorkerStatus('offline');
+        setShowWorkerWarning(true);
+      }
+    };
+
+    checkWorkerStatus();
+  }, []);
     setSelectedDraft(draft);
     setFormValues({});
     setStep('form');
@@ -193,9 +248,42 @@ export default function DraftScreen() {
       showAlert('Missing Fields', `Please fill: ${missing.map((f) => f.label).join(', ')}`);
       return;
     }
-    console.log('in generate')
+    
+    console.log('Starting generation with:', {
+      draft_type: selectedDraft.key,
+      language,
+      user_id: user.id,
+      pdf_worker_status: pdfWorkerStatus,
+      inputs_count: Object.keys(formValues).length
+    });
+
     setLoading(true);
+    
     try {
+      // Check if PDF worker is online
+      let workerReady = pdfWorkerStatus === 'online';
+      
+      if (!workerReady) {
+        console.log('[Draft Generation] PDF Worker not ready, checking status...');
+        showAlert('Initializing', 'PDF Worker is warming up. Please wait...');
+        
+        // Wait for PDF worker to come online (handle Render cold starts)
+        workerReady = await waitForPdfWorker(3, 2000);
+        
+        if (!workerReady) {
+          console.warn('[Draft Generation] PDF Worker failed to come online');
+          setPdfWorkerStatus('offline');
+          showAlert(
+            'PDF Worker Unavailable',
+            `The PDF generation service is currently unavailable (${getPdfWorkerUrl()}). Your document preview will be available, but PDF download may not work. Please try again in a moment.`
+          );
+          // Continue anyway - at least the text content will be available
+        } else {
+          setPdfWorkerStatus('online');
+          console.log('[Draft Generation] PDF Worker is now online');
+        }
+      }
+
       const response = await fetch(`${API_URL}/api/draft/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -206,16 +294,41 @@ export default function DraftScreen() {
           user_id: user.id,
         }),
       });
-      console.log(response)
+      
+      console.log('Response status:', response.status);
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+      
       if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.detail || 'Failed to generate draft');
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        const err = JSON.parse(errorText);
+        throw new Error(err.detail || `Server error: ${response.status}`);
       }
 
       const data = await response.json();
+      console.log('Response data received:', {
+        has_content: !!data.content,
+        content_length: data.content?.length,
+        has_pdf_base64: !!data.pdf_base64,
+        pdf_base64_length: data.pdf_base64?.length,
+      });
+      
+      if (!data.pdf_base64 || data.pdf_base64.trim() === '') {
+        console.warn('Warning: PDF base64 is empty - PDF Worker may not be responding');
+        setPdfWorkerStatus('offline');
+        showAlert(
+          'PDF Generation Failed', 
+          'PDF could not be generated, but your document preview is ready. The PDF service may be temporarily unavailable.'
+        );
+      } else {
+        setPdfWorkerStatus('online');
+      }
+      
       setResult(data);
       setStep('result');
+      showAlert('Success', 'Draft generated successfully!');
     } catch (error: any) {
+      console.error('Generation error:', error);
       showAlert('Error', error.message || 'Could not generate draft. Please try again.');
     } finally {
       setLoading(false);
@@ -223,24 +336,65 @@ export default function DraftScreen() {
   };
 
   const handleDownloadPDF = async () => {
-    if (!result?.pdf_base64) return;
+    if (!result?.pdf_base64) {
+      showAlert('Error', 'No PDF available to download');
+      return;
+    }
 
     if (Platform.OS === 'web') {
-      // Web download
-      const byteCharacters = atob(result.pdf_base64);
-      const byteArray = new Uint8Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteArray[i] = byteCharacters.charCodeAt(i);
+      // Web download - more robust implementation
+      try {
+        console.log('Starting PDF download...');
+        console.log('Base64 length:', result.pdf_base64.length);
+        
+        // Decode base64 to binary string
+        let binaryString;
+        try {
+          binaryString = atob(result.pdf_base64);
+        } catch (e) {
+          console.error('Failed to decode base64:', e);
+          showAlert('Error', 'Invalid PDF data. Please try generating again.');
+          return;
+        }
+
+        // Convert binary string to Uint8Array
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+
+        // Create blob
+        const blob = new Blob([bytes], { type: 'application/pdf' });
+        console.log('Blob created:', blob.size, 'bytes');
+
+        // Create download link
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${selectedDraft?.key}_${Date.now()}.pdf`;
+        link.style.display = 'none';
+
+        // Append to body, click, and remove
+        document.body.appendChild(link);
+        
+        // Use setTimeout to ensure DOM is updated
+        setTimeout(() => {
+          link.click();
+          console.log('Download triggered');
+          
+          // Cleanup after a slight delay
+          setTimeout(() => {
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            console.log('Cleanup completed');
+          }, 100);
+        }, 100);
+
+        showAlert('Success', 'PDF download started');
+      } catch (error: any) {
+        console.error('PDF download error:', error);
+        showAlert('Error', error.message || 'Failed to download PDF. Please try again.');
       }
-      const blob = new Blob([byteArray], { type: 'application/pdf' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${selectedDraft?.key}_${Date.now()}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
     } else {
       // Native — use expo-file-system + expo-sharing
       try {
@@ -251,8 +405,9 @@ export default function DraftScreen() {
           encoding: FileSystem.EncodingType.Base64,
         });
         await Sharing.shareAsync(path, { mimeType: 'application/pdf' });
-      } catch {
-        showAlert('Error', 'Could not download on this device. Try on web.');
+      } catch (error: any) {
+        console.error('Native download error:', error);
+        showAlert('Error', error.message || 'Could not download on this device. Try on web.');
       }
     }
   };
@@ -283,6 +438,8 @@ export default function DraftScreen() {
   if (step === 'select') {
     return (
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <PdfWorkerStatusBanner status={pdfWorkerStatus} />
+        
         <Text style={styles.screenTitle}>Legal Draft Generator</Text>
         <Text style={styles.screenSubtitle}>
           Generate court-ready documents instantly
@@ -314,6 +471,8 @@ export default function DraftScreen() {
   if (step === 'form' && selectedDraft) {
     return (
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <PdfWorkerStatusBanner status={pdfWorkerStatus} />
+        
         {/* Header */}
         <TouchableOpacity style={styles.backButton} onPress={() => setStep('select')}>
           <Ionicons name="arrow-back" size={20} color="#4F46E5" />
@@ -461,6 +620,30 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 40,
   },
+  
+  // Status banner
+  statusBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    padding: 12,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    marginBottom: 16,
+  },
+  statusBannerText: {
+    flex: 1,
+  },
+  statusBannerTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  statusBannerSubtext: {
+    fontSize: 11,
+    lineHeight: 14,
+  },
+
   screenTitle: {
     fontSize: 22,
     fontWeight: '700',
