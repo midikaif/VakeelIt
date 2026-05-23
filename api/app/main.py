@@ -74,6 +74,6 @@ async def ping_pdf_worker():
 
 @app.get("/api/health")
 async def health_check():
-    # Fire and forget: send a wake-up ping to the PDF worker in the background
-    asyncio.create_task(ping_pdf_worker())
+    # Ensure PDF worker is awake before responding
+    await ping_pdf_worker()
     return {"status": "healthy", "timestamp": datetime.utcnow()}
