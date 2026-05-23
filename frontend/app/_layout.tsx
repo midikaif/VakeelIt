@@ -7,6 +7,8 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
 export default function RootLayout() {
   // Wake up the Render backend container when the app loads (prevents cold start delays)
   useEffect(() => {
+    
+
     fetch(`${API_URL}/api/health`)
       .then(() => console.log('Backend wake-up ping successful'))
       .catch((err) => console.log('Backend wake-up ping initiated...'));

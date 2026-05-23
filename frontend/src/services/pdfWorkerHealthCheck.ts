@@ -1,4 +1,3 @@
-import { Platform } from "react-native";
 
 const PDF_WORKER_URL =
   process.env.EXPO_PUBLIC_PDF_WORKER_URL || "http://localhost:8001";
