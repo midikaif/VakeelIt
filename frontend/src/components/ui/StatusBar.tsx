@@ -33,8 +33,8 @@ export default function StatusBar() {
 
         setStatus({
           backendOnline,
-          pdfWorkerOnline: pdfWorkerResult.isOnline,
-          isWarmingUp: pdfWorkerResult.isWarmingUp,
+          pdfWorkerOnline: !!pdfWorkerResult.isOnline,
+          isWarmingUp: !!pdfWorkerResult.isWarmingUp,
         });
       } catch (error) {
         console.log("[StatusBar] Health check failed:", error);
